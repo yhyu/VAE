@@ -14,7 +14,7 @@ class VAE(object):
     def __init__(self, code_size=100, input_shape=(64, 64, 3), loss_weights=(1, 0.5), encoder='encoder.json', decoder='decoder.json'):
         self.code_size = code_size
         self.input_shape = input_shape
-        self.loss_weights = loss_weights
+        self.loss_weights = list(loss_weights)
         self.encoder_network = encoder
         self.decoder_network = decoder
 
@@ -50,7 +50,7 @@ class VAE(object):
         z, z_obj = self.encoder(real_img)
         reconstruct_img = self.decoder(z)
         self.vae = Model(inputs=[real_img], outputs=[reconstruct_img, z_obj])
-        self.vae.compile(optimizer=optimizer, loss=[self.reconstruct_loss, self.encoding_loss], loss_weights=list(self.loss_weights))
+        self.vae.compile(optimizer=optimizer, loss=[self.reconstruct_loss, self.encoding_loss], loss_weights=self.loss_weights)
 
     def train(self, images, batch_size=32, epochs=100):
         X_train = np.float32(images)/127.5 - 1
@@ -69,45 +69,55 @@ class VAE(object):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("images", type=str, help="images data file")
+    parser.add_argument("images", type=str, help="images data file in numpy data format")
     parser.add_argument("encoder", type=str, help="encoder nework definition json file")
     parser.add_argument("decoder", type=str, help="decoder nework definition json file")
-    parser.add_argument("-opt", "--optimizer", help="optimizer name", default='Adam')
-    parser.add_argument("-c", "--codesize", type=int, help="code size", default=100)
-    parser.add_argument("-s", "--shape", help="input image shape", default=(64,64,3))
-    parser.add_argument("-b", "--batchsize", type=int, help="batch size", default=32)
-    parser.add_argument("-e", "--epochs", type=int, help="number of epochs", default=100)
-    parser.add_argument("-out", "--output", type=str, help="output model file name")
-    parser.add_argument("-d", "--dir", help="ouput directory", default='./outputs')
-    parser.add_argument("-lw", "--lossweight", help="vae model loss weights in (reconnection, encoder objective)", default=(1.0, 0.5))
+    parser.add_argument("-opt", "--optimizer", help="optimizer name (default: Adam)", default='Adam')
+    parser.add_argument("-c", "--codesize", type=int, help="code size (default: 100)", default=100)
+    parser.add_argument("-s", "--shape", type=str, help="input image shape (default: (64,64,3))", default='(64,64,3)')
+    parser.add_argument("-b", "--batchsize", type=int, help="batch size (default: 32)", default=32)
+    parser.add_argument("-e", "--epochs", type=int, help="number of epochs (default: 200)", default=200)
+    parser.add_argument("-m", "--model", type=str, help="output (or input) model file name")
+    parser.add_argument("-d", "--dir", help="ouput directory (default: ./outputs)", default='./outputs')
+    parser.add_argument("-lw", "--lossweight", type=str, help="vae model loss weights in (reconnection, encoder objective) format (default: (1.0,0.5))", default='(1.0,0.5)')
+    parser.add_argument("-nt", "--testnum", type=int, help="number of test images (default: 36)", default=36)
+    parser.add_argument("-t", "--test", help="load model for test only if specified", action="store_true")
     args = parser.parse_args()
-
-    images = np.load(args.images)
-    np.random.shuffle(images)
-    x_test = images[:36]
-    x_train = images[36:]
-    vae = VAE(code_size=args.codesize, input_shape=args.shape, loss_weights=args.lossweight, encoder=args.encoder, decoder=args.decoder)
-    vae.build()
-    vae.train(images=x_train, batch_size=args.batchsize, epochs=args.epochs)
 
     Path(args.dir).mkdir(parents=True, exist_ok=True)
 
-    if len(args.output) > 0:
-        vae.save_model('%s/%s'% (args.dir, args.output))
+    images = np.load(args.images)
+    if len(images.shape) == 3:
+        # expand 2D images to 3D
+        images = np.expand_dims(images, axis=3)
+
+    x_test = images[:args.testnum]
+    x_train = images[args.testnum:]
+    if args.test:
+        vae = VAE()
+        vae.load_model()
+    else:
+        input_shape = tuple([int(d) for d in args.shape[1:len(args.shape)-1].split(',')])
+        loss_weights = [float(f) for f in args.lossweight[1:len(args.lossweight)-1].split(',')]
+        vae = VAE(code_size=args.codesize, input_shape=input_shape, loss_weights=loss_weights, encoder=args.encoder, decoder=args.decoder)
+        vae.build()
+        vae.train(images=x_train, batch_size=args.batchsize, epochs=args.epochs)
+        if len(args.model) > 0:
+            vae.save_model('%s/%s'% (args.dir, args.model))
 
     # save testing source/reconstructed images
     for idx, img in enumerate(vae.reconstruction(x_test)):
-        fake_test = Image.fromarray(img)
-        fake_test.save('%s/fake_test_%04d.jpeg' % (args.dir, idx+1))
-        real_test = Image.fromarray(x_test[idx])
-        real_test.save('%s/real_test_%04d.jpeg' % (args.dir, idx+1))
+        fake_test = Image.fromarray(np.squeeze(img))
+        fake_test.save('%s/fake_test_%04d.jpg' % (args.dir, idx+1))
+        real_test = Image.fromarray(np.squeeze(x_test[idx]))
+        real_test.save('%s/real_test_%04d.jpg' % (args.dir, idx+1))
 
     # save training source/reconstructed images
-    for idx, img in enumerate(vae.reconstruction(x_train[:36])):
-        fake_train = Image.fromarray(img)
-        fake_train.save('%s/fake_train_%04d.jpeg' % (args.dir, idx+1))
-        real_train = Image.fromarray(x_test[idx])
-        real_train.save('%s/real_train_%04d.jpeg' % (args.dir, idx+1))
+    for idx, img in enumerate(vae.reconstruction(x_train[:args.testnum])):
+        fake_train = Image.fromarray(np.squeeze(img))
+        fake_train.save('%s/fake_train_%04d.jpg' % (args.dir, idx+1))
+        real_train = Image.fromarray(np.squeeze(x_train[idx]))
+        real_train.save('%s/real_train_%04d.jpg' % (args.dir, idx+1))
 
 if __name__ == '__main__':
     main()
