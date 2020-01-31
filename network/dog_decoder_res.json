@@ -1,0 +1,165 @@
+{
+    "layers": [
+        {
+            "layer": "Dense",
+            "units": 16384
+        },
+        {
+            "layer": "Reshape",
+            "shape": [4, 4, 1024]
+        },
+        {
+            "layer": "BatchNormalization",
+            "momentum": 0.1,
+            "epsilon": 1e-05
+        },
+        {
+            "layer": "Activation",
+            "activation": "relu"
+        },
+        {
+            "layer": "ResConv2DTranspose",
+            "parameters": [0, 1024, 512, [3, 3], [2,2]]
+        },
+        {
+            "layer": "ResConv2DTranspose",
+            "parameters": [0, 512, 256, [3, 3], [2,2]]
+        },
+        {
+            "layer": "ResConv2DTranspose",
+            "parameters": [0, 256, 256, [3, 3], [1,1]]
+        },
+        {
+            "layer": "ResConv2DTranspose",
+            "parameters": [0, 256, 128, [3, 3], [2,2]]
+        },
+        {
+            "layer": "ResConv2DTranspose",
+            "parameters": [0, 128, 64, [3, 3], [2,2]]
+        },
+        {
+            "layer": "BatchNormalization",
+            "momentum": 0.1,
+            "epsilon": 1e-05
+        },
+        {
+            "layer": "Activation",
+            "activation": "relu"
+        },
+        {
+            "layer": "Conv2D",
+            "filters": 3,
+            "kernel": [3, 3],
+            "padding": "same",
+            "strides": 1,
+            "activation": "tanh"
+        }
+    ],
+    "blocks": {
+        "ResID2DTranspose": {
+            "parameters": ["f1", "f2", "f3", "kernel"],
+            "layers": [
+                {
+                    "layer": "Conv2D",
+                    "filters": "f1",
+                    "kernel": [1, 1],
+                    "padding": "valid"
+                },
+                {
+                    "layer": "BatchNormalization"
+                },
+                {
+                    "layer": "Activation",
+                    "activation": "relu"
+                },
+                {
+                    "layer": "Conv2D",
+                    "filters": "f2",
+                    "kernel": "kernel",
+                    "padding": "same"
+                },
+                {
+                    "layer": "BatchNormalization"
+                },
+                {
+                    "layer": "Activation",
+                    "activation": "relu"
+                },
+                {
+                    "layer": "Conv2D",
+                    "filters": "f3",
+                    "kernel": [1, 1],
+                    "padding": "valid"
+                },
+                {
+                    "layer": "BatchNormalization"
+                }
+            ],
+            "shortcut": {
+                "merge":  {
+                    "layer": "Add"
+                },
+                "layers": [],
+                "activation": {
+                    "layer": "Activation",
+                    "activation": "relu"
+                }
+            }
+        },
+        "ResConv2DTranspose": {
+            "parameters": ["f1", "f2", "f3", "kernel", "upsample"],
+            "layers": [
+                {
+                    "layer": "UpSampling2D",
+                    "size": "upsample"
+                },
+                {
+                    "layer": "Conv2D",
+                    "filters": "f2",
+                    "kernel": "kernel",
+                    "padding": "same"
+                },
+                {
+                    "layer": "BatchNormalization"
+                },
+                {
+                    "layer": "Activation",
+                    "activation": "relu"
+                },
+                {
+                    "layer": "Conv2D",
+                    "filters": "f3",
+                    "kernel": [1, 1],
+                    "padding": "valid"
+                },
+                {
+                    "layer": "BatchNormalization"
+                }
+            ],
+            "shortcut": {
+                "merge": {
+                    "layer": "Add"
+                },
+                "layers": [
+                    {
+                        "layer": "UpSampling2D",
+                        "size": "upsample"
+                    },
+                    {
+                        "layer": "Conv2D",
+                        "filters": "f3",
+                        "kernel": [1, 1],
+                        "padding": "valid"
+                    },
+                    {
+                        "layer": "BatchNormalization"
+                    }
+                ],
+                "activation": {
+                    "layer": "Activation",
+                    "activation": "relu"
+                }
+            }
+        }
+    }
+}
