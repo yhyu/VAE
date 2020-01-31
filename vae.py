@@ -9,7 +9,7 @@ from keras.models import Model, load_model
 from keras.layers import Input, Lambda, Dense
 from keras.layers import Add, Subtract, Multiply
 from nn import NN
-    
+
 class VAE(object):
     def __init__(self, code_size=100, input_shape=(64, 64, 3), loss_weights=(1, 0.5), encoder='encoder.json', decoder='decoder.json'):
         self.code_size = code_size
@@ -17,13 +17,13 @@ class VAE(object):
         self.loss_weights = loss_weights
         self.encoder_network = encoder
         self.decoder_network = decoder
-        
+
     def random_normal(self, x):
         return K.random_normal(K.shape(x))
 
     def encoding_loss(self, y_true, y_pred):
         return K.sum(y_pred-1, axis=-1)
-    
+
     def reconstruct_loss(self, y_true, y_pred):
         dims = len(K.int_shape(y_true))
         return K.sum(K.abs(y_pred - y_true), axis=tuple(range(1, dims)))
