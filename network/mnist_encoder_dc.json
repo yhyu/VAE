@@ -1,0 +1,65 @@
+{
+    "image_shape": [28, 28, 1],
+    "layers": [
+        {
+          "layer": "Conv2D",
+          "filters": 64,
+          "kernel": [4, 4],
+          "strides": 2,
+          "padding": "same"
+        },
+        {
+            "layer": "BatchNormalization",
+            "momentum": 0.1,
+            "epsilon": 1e-05
+        },
+        {
+            "layer": "Activation",
+            "activation": "relu"
+        },
+        {
+          "layer": "Conv2D",
+          "filters": 128,
+          "kernel": [4, 4],
+          "strides": 2,
+          "padding": "same"
+        },
+        {
+            "layer": "BatchNormalization",
+            "momentum": 0.1,
+            "epsilon": 1e-05
+        },
+        {
+            "layer": "Activation",
+            "activation": "relu"
+        },
+        {
+          "layer": "Conv2D",
+          "filters": 256,
+          "kernel": [4, 4],
+          "strides": 2,
+          "padding": "same"
+        },
+        {
+            "layer": "BatchNormalization",
+            "momentum": 0.1,
+            "epsilon": 1e-05
+        },
+        {
+            "layer": "Activation",
+            "activation": "relu"
+        },
+        {
+          "layer": "MaxPooling2D",
+          "size": [2, 2]
+        },
+        {
+          "layer": "Flatten"
+        },
+        {
+          "layer": "Dense",
+          "units": 16,
+          "activation": "relu"
+        }
+    ]
+}
