@@ -10,6 +10,9 @@ from keras.layers import Input, Lambda, Dense
 from keras.layers import Add, Subtract, Multiply
 from nn import NN
 
+def random_normal(x):
+    return K.random_normal(K.shape(x))
+
 class VAE(object):
     def __init__(self, code_size=100, input_shape=(64, 64, 3), loss_weights=(1, 0.5), encoder='encoder.json', decoder='decoder.json'):
         self.code_size = code_size
@@ -17,9 +20,6 @@ class VAE(object):
         self.loss_weights = list(loss_weights)
         self.encoder_network = encoder
         self.decoder_network = decoder
-
-    def random_normal(self, x):
-        return K.random_normal(K.shape(x))
 
     def encoding_loss(self, y_true, y_pred):
         return K.sum(y_pred-1, axis=-1)
@@ -35,15 +35,15 @@ class VAE(object):
         enc_out = enc_nn.build(enc_input)
         code_mean = Dense(self.code_size)(enc_out)
         code_var = Dense(self.code_size)(enc_out)
-        code = Add()([code_mean, Multiply()([Lambda(K.exp)(code_var), Lambda(self.random_normal)(code_var)])])
+        code = Add()([code_mean, Multiply()([Lambda(K.exp)(code_var), Lambda(random_normal)(code_var)])])
         enc_obj = Subtract()([Add()([Lambda(K.square)(code_mean), Lambda(K.exp)(code_var)]), code_var])
-        self.encoder = Model(enc_input, [code, enc_obj])
+        self.encoder = Model(enc_input, [code, enc_obj], name='encoder')
 
         # build decoder
         dec_input = Input(shape=[self.code_size])
         dec_nn = NN(self.decoder_network)
         dec_out = dec_nn.build(dec_input)
-        self.decoder = Model(dec_input, dec_out)
+        self.decoder = Model(dec_input, dec_out, name='decoder')
 
         # compose VAE
         real_img = Input(shape=self.input_shape)
@@ -52,19 +52,30 @@ class VAE(object):
         self.vae = Model(inputs=[real_img], outputs=[reconstruct_img, z_obj])
         self.vae.compile(optimizer=optimizer, loss=[self.reconstruct_loss, self.encoding_loss], loss_weights=self.loss_weights)
 
-    def train(self, images, batch_size=32, epochs=100):
+    def train(self, images, test_images, batch_size=32, epochs=100):
         X_train = np.float32(images)/127.5 - 1
-        self.vae.fit(X_train, [X_train, np.zeros((X_train.shape[0], 1))], batch_size=batch_size, epochs=epochs)
+        X_test = np.float32(test_images)/127.5 - 1
+        self.vae.fit(X_train, [X_train, np.zeros((X_train.shape[0], 1))], batch_size=batch_size, epochs=epochs, validation_data=(X_test, [X_test, np.zeros((X_test.shape[0], 1))]))
 
     def save_model(self, model_path):
         self.vae.save(model_path)
 
     def load_model(self, model_path):
         self.vae = load_model(model_path, custom_objects={'tf': tf}, compile=False)
+        self.encoder = self.vae.get_layer('encoder')
+        self.decoder = self.vae.get_layer('decoder')
 
     def reconstruction(self, images):
         real_images = np.float32(images)/127.5 - 1
         fake_images = self.vae.predict(real_images)[0]
+        return ((fake_images + 1)*127.5).astype(np.uint8)
+
+    def encoding(self, images):
+        real_images = np.float32(images)/127.5 - 1
+        return self.encoder.predict(real_images)[0]
+
+    def decoding(self, codes):
+        fake_images = self.decoder.predict(codes)
         return ((fake_images + 1)*127.5).astype(np.uint8)
 
 def main():
@@ -79,7 +90,7 @@ def main():
     parser.add_argument("-e", "--epochs", type=int, help="number of epochs (default: 200)", default=200)
     parser.add_argument("-m", "--model", type=str, help="output (or input) model file name")
     parser.add_argument("-d", "--dir", help="ouput directory (default: ./outputs)", default='./outputs')
-    parser.add_argument("-lw", "--lossweight", type=str, help="vae model loss weights in (reconnection, encoder objective) format (default: (1.0,0.5))", default='(1.0,0.5)')
+    parser.add_argument("-lw", "--lossweight", type=str, help="vae model loss weights in (reconnection, encoder objective) format (default: (1,0.3))", default='(1,0.3)')
     parser.add_argument("-nt", "--testnum", type=int, help="number of test images (default: 36)", default=36)
     parser.add_argument("-t", "--test", help="load model for test only if specified", action="store_true")
     args = parser.parse_args()
@@ -95,29 +106,33 @@ def main():
     x_train = images[args.testnum:]
     if args.test:
         vae = VAE()
-        vae.load_model()
+        vae.load_model('%s/%s'% (args.dir, args.model))
     else:
         input_shape = tuple([int(d) for d in args.shape[1:len(args.shape)-1].split(',')])
         loss_weights = [float(f) for f in args.lossweight[1:len(args.lossweight)-1].split(',')]
         vae = VAE(code_size=args.codesize, input_shape=input_shape, loss_weights=loss_weights, encoder=args.encoder, decoder=args.decoder)
         vae.build()
-        vae.train(images=x_train, batch_size=args.batchsize, epochs=args.epochs)
+        vae.train(images=x_train, test_images=x_test, batch_size=args.batchsize, epochs=args.epochs)
         if len(args.model) > 0:
             vae.save_model('%s/%s'% (args.dir, args.model))
 
     # save testing source/reconstructed images
+    Path('%s/fake_test' % (args.dir)).mkdir(parents=True, exist_ok=True)
+    Path('%s/real_test' % (args.dir)).mkdir(parents=True, exist_ok=True)
     for idx, img in enumerate(vae.reconstruction(x_test)):
         fake_test = Image.fromarray(np.squeeze(img))
-        fake_test.save('%s/fake_test_%04d.jpg' % (args.dir, idx+1))
+        fake_test.save('%s/fake_test/fake_test_%04d.jpg' % (args.dir, idx+1))
         real_test = Image.fromarray(np.squeeze(x_test[idx]))
-        real_test.save('%s/real_test_%04d.jpg' % (args.dir, idx+1))
+        real_test.save('%s/real_test/real_test_%04d.jpg' % (args.dir, idx+1))
 
     # save training source/reconstructed images
+    Path('%s/fake_train' % (args.dir)).mkdir(parents=True, exist_ok=True)
+    Path('%s/real_train' % (args.dir)).mkdir(parents=True, exist_ok=True)
     for idx, img in enumerate(vae.reconstruction(x_train[:args.testnum])):
         fake_train = Image.fromarray(np.squeeze(img))
-        fake_train.save('%s/fake_train_%04d.jpg' % (args.dir, idx+1))
+        fake_train.save('%s/fake_train/fake_train_%04d.jpg' % (args.dir, idx+1))
         real_train = Image.fromarray(np.squeeze(x_train[idx]))
-        real_train.save('%s/real_train_%04d.jpg' % (args.dir, idx+1))
+        real_train.save('%s/real_train/real_train_%04d.jpg' % (args.dir, idx+1))
 
 if __name__ == '__main__':
     main()
