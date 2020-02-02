@@ -57,7 +57,7 @@ python vae.py ./data/mnist.npy network/mnist_encoder_dc.json network/mnist_decod
 ```
 
 ## Results
-| Original Images | Reconstruction Images |
+| Original Images | Reconstructed Images |
 |:-------:|:-------:|
-|![](https://github.com/yhyu/VAE/blob/master/images/real_mnist.jpg)|![](https://github.com/yhyu/VAE/blob/master/images/fake_mnist.jpg)|
 |![](https://github.com/yhyu/VAE/blob/master/images/real_dog.jpg)|![](https://github.com/yhyu/VAE/blob/master/images/fake_dog.jpg)|
+|![](https://github.com/yhyu/VAE/blob/master/images/real_digits.jpg)|![](https://github.com/yhyu/VAE/blob/master/images/fake_digits.jpg)|
